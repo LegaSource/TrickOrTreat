@@ -19,7 +19,7 @@ namespace TrickOrTreat
     {
         private const string modGUID = "Lega.TrickOrTreat";
         private const string modName = "Trick Or Treat";
-        private const string modVersion = "1.0.0";
+        private const string modVersion = "1.0.1";
 
         private readonly Harmony harmony = new Harmony(modGUID);
         private readonly static AssetBundle bundle = AssetBundle.LoadFromFile(Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "trickortreat"));
@@ -39,6 +39,7 @@ namespace TrickOrTreat
             LoadEnemies();
             LoadSprites();
 
+            harmony.PatchAll(typeof(ObjectCSManagerPatch));
             harmony.PatchAll(typeof(PlayerControllerBPatch));
             harmony.PatchAll(typeof(BeltBagItemPatch));
             harmony.PatchAll(typeof(BeltBagInventoryUIPatch));
@@ -65,22 +66,19 @@ namespace TrickOrTreat
         {
             List<CustomItem> customItems = new List<CustomItem>
             {
-                new CustomItem(true, typeof(HalloweenCandy), bundle.LoadAsset<Item>("Assets/HalloweenCandy/HalloweenCandyItem.asset"), true, ConfigManager.minHalloweenCandy.Value, ConfigManager.maxHalloweenCandy.Value, ConfigManager.halloweenCandyRarity.Value)
+                new CustomItem(typeof(HalloweenCandy), bundle.LoadAsset<Item>("Assets/HalloweenCandy/HalloweenCandyItem.asset"), true, ConfigManager.minHalloweenCandy.Value, ConfigManager.maxHalloweenCandy.Value, ConfigManager.halloweenCandyRarity.Value)
             };
 
             foreach (CustomItem customItem in customItems)
             {
-                if (customItem.IsEnabled)
-                {
-                    var script = customItem.Item.spawnPrefab.AddComponent(customItem.Type) as PhysicsProp;
-                    script.grabbable = true;
-                    script.grabbableToEnemies = true;
-                    script.itemProperties = customItem.Item;
+                var script = customItem.Item.spawnPrefab.AddComponent(customItem.Type) as PhysicsProp;
+                script.grabbable = true;
+                script.grabbableToEnemies = true;
+                script.itemProperties = customItem.Item;
 
-                    NetworkPrefabs.RegisterNetworkPrefab(customItem.Item.spawnPrefab);
-                    Utilities.FixMixerGroups(customItem.Item.spawnPrefab);
-                    Items.RegisterItem(customItem.Item);
-                }
+                NetworkPrefabs.RegisterNetworkPrefab(customItem.Item.spawnPrefab);
+                Utilities.FixMixerGroups(customItem.Item.spawnPrefab);
+                Items.RegisterItem(customItem.Item);
             }
             CursedScraps.CursedScraps.customItems.AddRange(customItems);
         }

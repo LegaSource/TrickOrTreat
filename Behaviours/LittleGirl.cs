@@ -35,7 +35,7 @@ namespace TrickOrTreat.Behaviours
             base.Start();
 
             currentBehaviourStateIndex = (int)State.WANDERING;
-            creatureAnimator.SetBool("isWalking", true);
+            creatureAnimator.SetBool("startWalk", true);
             StartSearch(transform.position);
         }
 
@@ -43,10 +43,10 @@ namespace TrickOrTreat.Behaviours
         {
             base.Update();
 
+            creatureAnimator.SetBool("stunned", stunNormalizedTimer > 0f);
             if (stunNormalizedTimer > 0f)
             {
                 agent.speed = 0f;
-                DoAnimationClientRpc("stun");
                 if (stunnedByPlayer != null)
                 {
                     targetPlayer = stunnedByPlayer;
@@ -91,19 +91,19 @@ namespace TrickOrTreat.Behaviours
             {
                 case (int)State.WANDERING:
                     agent.speed = 4f;
-                    DoAnimationClientRpc("walk");
                     if (FoundClosestPlayerInRange(25f, 10f))
                     {
                         StopSearch(currentSearch);
+                        DoAnimationClientRpc("startRun");
                         SwitchToBehaviourClientRpc((int)State.CHASING);
                     }
                     break;
                 case (int)State.CHASING:
                     agent.speed = 6f;
-                    DoAnimationClientRpc("run");
                     if (!TargetClosestPlayerInAnyCase() || (Vector3.Distance(transform.position, targetPlayer.transform.position) > 20 && !CheckLineOfSightForPosition(targetPlayer.transform.position)))
                     {
                         StartSearch(transform.position);
+                        DoAnimationClientRpc("startWalk");
                         SwitchToBehaviourClientRpc((int)State.WANDERING);
                         return;
                     }
@@ -111,12 +111,10 @@ namespace TrickOrTreat.Behaviours
                     break;
                 case (int)State.INTERACTING:
                     agent.speed = 0f;
-                    DoAnimationClientRpc("idle");
                     interactingCoroutine ??= StartCoroutine(InteractingWithPlayerCoroutine());
                     break;
                 case (int)State.FLEEING:
                     agent.speed = 6f;
-                    DoAnimationClientRpc("run");
                     fleeingCoroutine ??= StartCoroutine(FleeingCoroutine());
                     break;
 
@@ -173,7 +171,7 @@ namespace TrickOrTreat.Behaviours
                         eligibleCurses = eligibleCurses.Except(playerBehaviour.activeCurses).ToList();
                     }
 
-                    DoAnimationClientRpc("curse");
+                    DoAnimationClientRpc("startCurse");
                     ScreamClientRpc();
 
                     // Attendre le temps de l'animation
@@ -192,6 +190,7 @@ namespace TrickOrTreat.Behaviours
                 }
             }
 
+            DoAnimationClientRpc("startRun");
             SwitchToBehaviourClientRpc((int)State.FLEEING);
 
             yield return new WaitForSeconds(5f);
@@ -238,6 +237,7 @@ namespace TrickOrTreat.Behaviours
             }
 
             StartSearch(transform.position);
+            DoAnimationClientRpc("startWalk");
             SwitchToBehaviourClientRpc((int)State.WANDERING);
             fleeingCoroutine = null;
         }
@@ -247,6 +247,7 @@ namespace TrickOrTreat.Behaviours
             PlayerControllerB player = MeetsStandardPlayerCollisionConditions(other);
             if (player != null && currentBehaviourStateIndex == (int)State.CHASING)
             {
+                DoAnimationClientRpc("startIdle");
                 SwitchToBehaviourServerRpc((int)State.INTERACTING);
             }
         }
@@ -254,29 +255,7 @@ namespace TrickOrTreat.Behaviours
         [ClientRpc]
         public void DoAnimationClientRpc(string animationState)
         {
-            // Dictionnaire des états pour les animations
-            var animationMap = new Dictionary<string, Action>
-            {
-                { "curse", () => creatureAnimator.SetTrigger("curse") },
-                { "stun", () => SetAnimationBools(isStunned: true)},
-                { "walk", () => SetAnimationBools(isWalking: true) },
-                { "run", () => SetAnimationBools(isRunning: true) },
-                { "idle", () => SetAnimationBools(isIdling: true) }
-            };
-
-            if (animationMap.ContainsKey(animationState))
-            {
-                // Déclenche l'animation correspondante
-                animationMap[animationState].Invoke();
-            }
-        }
-
-        private void SetAnimationBools(bool isStunned = false, bool isWalking = false, bool isRunning = false, bool isIdling = false)
-        {
-            creatureAnimator.SetBool("stunned", isStunned);
-            creatureAnimator.SetBool("isWalking", isWalking);
-            creatureAnimator.SetBool("isRunning", isRunning);
-            creatureAnimator.SetBool("isIdling", isIdling);
+            creatureAnimator.SetTrigger(animationState);
         }
     }
 }
