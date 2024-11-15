@@ -19,7 +19,7 @@ namespace TrickOrTreat
     {
         private const string modGUID = "Lega.TrickOrTreat";
         private const string modName = "Trick Or Treat";
-        private const string modVersion = "1.0.1";
+        private const string modVersion = "1.0.2";
 
         private readonly Harmony harmony = new Harmony(modGUID);
         private readonly static AssetBundle bundle = AssetBundle.LoadFromFile(Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "trickortreat"));
@@ -66,15 +66,16 @@ namespace TrickOrTreat
         {
             List<CustomItem> customItems = new List<CustomItem>
             {
-                new CustomItem(typeof(HalloweenCandy), bundle.LoadAsset<Item>("Assets/HalloweenCandy/HalloweenCandyItem.asset"), true, ConfigManager.minHalloweenCandy.Value, ConfigManager.maxHalloweenCandy.Value, ConfigManager.halloweenCandyRarity.Value)
+                new CustomItem(typeof(HalloweenCandy), bundle.LoadAsset<Item>("Assets/HalloweenCandy/HalloweenCandyItem.asset"), true, ConfigManager.minHalloweenCandy.Value, ConfigManager.maxHalloweenCandy.Value, ConfigManager.halloweenCandyRarity.Value, ConfigManager.halloweenCandyValue.Value)
             };
 
             foreach (CustomItem customItem in customItems)
             {
-                var script = customItem.Item.spawnPrefab.AddComponent(customItem.Type) as PhysicsProp;
+                PhysicsProp script = customItem.Item.spawnPrefab.AddComponent(customItem.Type) as PhysicsProp;
                 script.grabbable = true;
                 script.grabbableToEnemies = true;
                 script.itemProperties = customItem.Item;
+                if (customItem.Item.isScrap) script.scrapValue = customItem.Value;
 
                 NetworkPrefabs.RegisterNetworkPrefab(customItem.Item.spawnPrefab);
                 Utilities.FixMixerGroups(customItem.Item.spawnPrefab);

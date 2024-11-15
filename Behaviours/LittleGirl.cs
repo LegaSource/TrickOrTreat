@@ -6,7 +6,6 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using TrickOrTreat.Managers;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -161,7 +160,7 @@ namespace TrickOrTreat.Behaviours
                 yield return new WaitForSeconds(1f);
                 timePassed++;
 
-                if (timePassed >= ConfigManager.waitingDuration.Value || Vector3.Distance(transform.position, targetPlayer.transform.position) > 20f)
+                if (timePassed >= Managers.ConfigManager.waitingDuration.Value || Vector3.Distance(transform.position, targetPlayer.transform.position) > 20f)
                 {
                     isWaiting = false;
                     List<CurseEffect> eligibleCurses = CurseCSManager.GetEligibleCurseEffects(StartOfRound.Instance.currentLevel.PlanetName);

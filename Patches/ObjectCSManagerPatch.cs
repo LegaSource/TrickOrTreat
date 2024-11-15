@@ -2,7 +2,6 @@
 using HarmonyLib;
 using System.Linq;
 using TrickOrTreat.Behaviours;
-using TrickOrTreat.Managers;
 
 namespace TrickOrTreat.Patches
 {
@@ -12,8 +11,12 @@ namespace TrickOrTreat.Patches
         [HarmonyPostfix]
         private static void ChangeRarity()
         {
-            int countCandies = UnityEngine.Object.FindObjectsOfType<HalloweenCandy>().Count();
-            RoundManager.Instance.currentLevel.Enemies.FirstOrDefault(e => e.enemyType.enemyName.Equals(Constants.LITTLE_GIRL)).rarity = ConfigManager.littleGirlRarity.Value + countCandies * ConfigManager.littleGirlRarityIncrement.Value;
+            SpawnableEnemyWithRarity spawnableEnemies = RoundManager.Instance.currentLevel.Enemies.FirstOrDefault(e => e.enemyType.enemyName.Equals(Constants.LITTLE_GIRL));
+            if (spawnableEnemies != null)
+            {
+                int countCandies = UnityEngine.Object.FindObjectsOfType<HalloweenCandy>().Count();
+                spawnableEnemies.rarity = Managers.ConfigManager.littleGirlRarity.Value + countCandies * Managers.ConfigManager.littleGirlRarityIncrement.Value;
+            }
         }
     }
 }
