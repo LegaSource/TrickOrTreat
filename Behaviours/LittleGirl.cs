@@ -6,6 +6,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using TrickOrTreat.Patches;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -13,15 +14,17 @@ namespace TrickOrTreat.Behaviours
 {
     public class LittleGirl : EnemyAI
     {
-        public static Coroutine interactingCoroutine;
-        public static Coroutine fleeingCoroutine;
-        public bool isWaiting = false;
-        public bool isBaited = false;
         public Transform TurnCompass;
         public AudioClip[] FootstepSounds = Array.Empty<AudioClip>();
         public float footstepTimer = 0f;
 
-        enum State
+        public bool isWaiting = false;
+        public bool isBaited = false;
+
+        public static Coroutine interactingCoroutine;
+        public static Coroutine fleeingCoroutine;
+
+        public enum State
         {
             WANDERING,
             CHASING,
@@ -65,10 +68,7 @@ namespace TrickOrTreat.Behaviours
 
         public void PlayFootstepSound()
         {
-            if (currentBehaviourStateIndex == (int)State.INTERACTING)
-            {
-                return;
-            }
+            if (currentBehaviourStateIndex == (int)State.INTERACTING) return;
 
             footstepTimer -= Time.deltaTime;
             if (FootstepSounds.Length > 0 && footstepTimer <= 0)
@@ -81,10 +81,8 @@ namespace TrickOrTreat.Behaviours
         public override void DoAIInterval()
         {
             base.DoAIInterval();
-            if (isEnemyDead || StartOfRound.Instance.allPlayersDead)
-            {
-                return;
-            };
+
+            if (isEnemyDead || StartOfRound.Instance.allPlayersDead) return;
 
             switch (currentBehaviourStateIndex)
             {
@@ -99,11 +97,18 @@ namespace TrickOrTreat.Behaviours
                     break;
                 case (int)State.CHASING:
                     agent.speed = 6f;
-                    if (!TargetClosestPlayerInAnyCase() || (Vector3.Distance(transform.position, targetPlayer.transform.position) > 20 && !CheckLineOfSightForPosition(targetPlayer.transform.position)))
+                    float distanceWithPlayer = Vector3.Distance(transform.position, targetPlayer.transform.position);
+                    if (!TargetClosestPlayerInAnyCase() || (distanceWithPlayer > 20 && !CheckLineOfSightForPosition(targetPlayer.transform.position)))
                     {
                         StartSearch(transform.position);
                         DoAnimationClientRpc("startWalk");
                         SwitchToBehaviourClientRpc((int)State.WANDERING);
+                        return;
+                    }
+                    if (distanceWithPlayer <= 5f)
+                    {
+                        DoAnimationClientRpc("startIdle");
+                        SwitchToBehaviourServerRpc((int)State.INTERACTING);
                         return;
                     }
                     SetMovingTowardsTargetPlayer(targetPlayer);
@@ -152,7 +157,7 @@ namespace TrickOrTreat.Behaviours
 
         public IEnumerator InteractingWithPlayerCoroutine()
         {
-            BeginInteractingClientRpc("Trick or treat?", "Little Girl", (int)targetPlayer.playerClientId);
+            BeginInteractingClientRpc(Constants.MESSAGE_TRICK_OR_TREAT, Constants.LITTLE_GIRL, (int)targetPlayer.playerClientId);
 
             int timePassed = 0;
             while (!isBaited)
@@ -166,9 +171,7 @@ namespace TrickOrTreat.Behaviours
                     List<CurseEffect> eligibleCurses = CurseCSManager.GetEligibleCurseEffects(StartOfRound.Instance.currentLevel.PlanetName);
                     PlayerCSBehaviour playerBehaviour = targetPlayer.GetComponent<PlayerCSBehaviour>();
                     if (playerBehaviour.activeCurses.Count > 0 && playerBehaviour.activeCurses.Count != eligibleCurses.Count)
-                    {
                         eligibleCurses = eligibleCurses.Except(playerBehaviour.activeCurses).ToList();
-                    }
 
                     DoAnimationClientRpc("startCurse");
                     ScreamClientRpc();
@@ -178,13 +181,10 @@ namespace TrickOrTreat.Behaviours
                     yield return new WaitForSeconds(creatureAnimator.GetCurrentAnimatorStateInfo(0).length);
 
                     if (eligibleCurses.Count > 0)
-                    {
                         CursedScrapsNetworkManager.Instance.SetPlayerCurseEffectServerRpc((int)targetPlayer.playerClientId, eligibleCurses[new System.Random().Next(eligibleCurses.Count)].CurseName, true);
-                    }
                     else
-                    {
                         CursedScrapsNetworkManager.Instance.KillPlayerServerRpc((int)targetPlayer.playerClientId, Vector3.zero, true, (int)CauseOfDeath.Unknown);
-                    }
+
                     break;
                 }
             }
@@ -203,16 +203,12 @@ namespace TrickOrTreat.Behaviours
             isWaiting = true;
             enemyType.canBeStunned = false;
             if (GameNetworkManager.Instance.localPlayerController == StartOfRound.Instance.allPlayerObjects[playerId].GetComponent<PlayerControllerB>())
-            {
                 HUDManager.Instance.AddChatMessage(message, sender);
-            }
         }
 
         [ClientRpc]
         public void ScreamClientRpc()
-        {
-            creatureVoice.Play();
-        }
+            => creatureVoice.Play();
 
         [ClientRpc]
         public void EndInteractingClientRpc()
@@ -222,6 +218,32 @@ namespace TrickOrTreat.Behaviours
             enemyType.canBeStunned = true;
             interactingCoroutine = null;
         }
+
+        public void InteractingWithEnemy()
+        {
+            if (isWaiting)
+            {
+                if (PlayerControllerBPatch.currentStackedCandies > 0)
+                {
+                    GiveCandyServerRpc();
+
+                    PlayerControllerBPatch.currentStackedCandies--;
+                    if (PlayerControllerBPatch.currentStackedCandies <= 0)
+                        HUDManagerPatch.SetActive(false);
+
+                    return;
+                }
+                HUDManager.Instance.DisplayTip(Constants.INFORMATION, Constants.MESSAGE_INFO_NO_CANDY);
+            }
+        }
+
+        [ServerRpc(RequireOwnership = false)]
+        public void GiveCandyServerRpc()
+            => GiveCandyClientRpc();
+
+        [ClientRpc]
+        public void GiveCandyClientRpc()
+            => isBaited = true;
 
         public IEnumerator FleeingCoroutine()
         {
@@ -241,20 +263,8 @@ namespace TrickOrTreat.Behaviours
             fleeingCoroutine = null;
         }
 
-        public override void OnCollideWithPlayer(Collider other)
-        {
-            PlayerControllerB player = MeetsStandardPlayerCollisionConditions(other);
-            if (player != null && currentBehaviourStateIndex == (int)State.CHASING)
-            {
-                DoAnimationClientRpc("startIdle");
-                SwitchToBehaviourServerRpc((int)State.INTERACTING);
-            }
-        }
-
         [ClientRpc]
         public void DoAnimationClientRpc(string animationState)
-        {
-            creatureAnimator.SetTrigger(animationState);
-        }
+            => creatureAnimator.SetTrigger(animationState);
     }
 }

@@ -19,14 +19,14 @@ namespace TrickOrTreat
     {
         private const string modGUID = "Lega.TrickOrTreat";
         private const string modName = "Trick Or Treat";
-        private const string modVersion = "1.0.2";
+        private const string modVersion = "1.0.3";
 
         private readonly Harmony harmony = new Harmony(modGUID);
         private readonly static AssetBundle bundle = AssetBundle.LoadFromFile(Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "trickortreat"));
         internal static ManualLogSource mls;
         public static ConfigFile configFile;
 
-        public static List<Sprite> sprites = new List<Sprite>();
+        public static GameObject halloweenCandySprite;
 
         public void Awake()
         {
@@ -39,10 +39,11 @@ namespace TrickOrTreat
             LoadEnemies();
             LoadSprites();
 
+            harmony.PatchAll(typeof(HUDManagerPatch));
             harmony.PatchAll(typeof(ObjectCSManagerPatch));
             harmony.PatchAll(typeof(PlayerControllerBPatch));
             harmony.PatchAll(typeof(BeltBagItemPatch));
-            harmony.PatchAll(typeof(BeltBagInventoryUIPatch));
+            harmony.PatchAll(typeof(RoundManagerPatch));
         }
 
         private static void NetcodePatcher()
@@ -55,9 +56,7 @@ namespace TrickOrTreat
                 {
                     var attributes = method.GetCustomAttributes(typeof(RuntimeInitializeOnLoadMethodAttribute), false);
                     if (attributes.Length > 0)
-                    {
                         method.Invoke(null, null);
-                    }
                 }
             }
         }
@@ -66,7 +65,7 @@ namespace TrickOrTreat
         {
             List<CustomItem> customItems = new List<CustomItem>
             {
-                new CustomItem(typeof(HalloweenCandy), bundle.LoadAsset<Item>("Assets/HalloweenCandy/HalloweenCandyItem.asset"), true, ConfigManager.minHalloweenCandy.Value, ConfigManager.maxHalloweenCandy.Value, ConfigManager.halloweenCandyRarity.Value, ConfigManager.halloweenCandyValue.Value)
+                new CustomItem(typeof(HalloweenCandy), bundle.LoadAsset<Item>("Assets/HalloweenCandy/HalloweenCandyItem.asset"), true, ConfigManager.minHalloweenCandy.Value, ConfigManager.maxHalloweenCandy.Value, ConfigManager.halloweenCandyRarity.Value)
             };
 
             foreach (CustomItem customItem in customItems)
@@ -92,15 +91,6 @@ namespace TrickOrTreat
         }
 
         public static void LoadSprites()
-        {
-            sprites = new List<Sprite>
-            {
-                bundle.LoadAsset<Sprite>("Assets/Images/HalloweenCandy1.png"),
-                bundle.LoadAsset<Sprite>("Assets/Images/HalloweenCandy2.png"),
-                bundle.LoadAsset<Sprite>("Assets/Images/HalloweenCandy3.png"),
-                bundle.LoadAsset<Sprite>("Assets/Images/HalloweenCandy4.png"),
-                bundle.LoadAsset<Sprite>("Assets/Images/HalloweenCandy5.png")
-            };
-        }
+            => halloweenCandySprite = bundle.LoadAsset<GameObject>("Assets/Images/HalloweenCandyImage.prefab");
     }
 }

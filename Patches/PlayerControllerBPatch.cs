@@ -7,6 +7,8 @@ namespace TrickOrTreat.Patches
 {
     internal class PlayerControllerBPatch
     {
+        public static int currentStackedCandies = 0;
+
         [HarmonyPatch(typeof(PlayerControllerB), nameof(PlayerControllerB.BeginGrabObject))]
         [HarmonyPrefix]
         private static bool PreGrabObject(ref PlayerControllerB __instance)
@@ -16,35 +18,22 @@ namespace TrickOrTreat.Patches
             {
                 return true;
             }
+
             GrabbableObject grabbableObject = __instance.hit.collider.transform.gameObject.GetComponent<GrabbableObject>();
             if (grabbableObject != null && grabbableObject is HalloweenCandy halloweenCandy)
             {
-                for (int i = 0; i < __instance.ItemSlots.Length; i++)
-                {
-                    if (__instance.ItemSlots[i] != null && __instance.ItemSlots[i] is HalloweenCandy halloweenCandyHolded && halloweenCandyHolded.currentStackedItems < 5)
-                    {
-                        halloweenCandyHolded.currentStackedItems++;
-                        halloweenCandy.UpdateIcon(i, halloweenCandyHolded.currentStackedItems);
-                        halloweenCandy.DestroyObjectServerRpc();
-                        return false;
-                    }
-                }
+                AddHalloweenCandy(halloweenCandy);
+                return false;
             }
+
             return true;
         }
 
-        [HarmonyPatch(typeof(PlayerControllerB), nameof(PlayerControllerB.DiscardHeldObject))]
-        [HarmonyPrefix]
-        private static bool PreDropObject(ref PlayerControllerB __instance)
+        public static void AddHalloweenCandy(HalloweenCandy halloweenCandy)
         {
-            if (__instance.currentlyHeldObjectServer is HalloweenCandy halloweenCandy && halloweenCandy.currentStackedItems > 1)
-            {
-                halloweenCandy.currentStackedItems--;
-                halloweenCandy.UpdateIcon(__instance.currentItemSlot, halloweenCandy.currentStackedItems);
-                halloweenCandy.SpawnObjectServerRpc((int)__instance.playerClientId);
-                return false;
-            }
-            return true;
+            halloweenCandy.DestroyObjectServerRpc();
+            currentStackedCandies++;
+            HUDManagerPatch.SetActive(true);
         }
     }
 }
