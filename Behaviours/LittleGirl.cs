@@ -88,7 +88,7 @@ namespace TrickOrTreat.Behaviours
             {
                 case (int)State.WANDERING:
                     agent.speed = 4f;
-                    if (FoundClosestPlayerInRange(25f, 10f))
+                    if (FoundClosestPlayerInRange(25, 10))
                     {
                         StopSearch(currentSearch);
                         DoAnimationClientRpc("startRun");
@@ -127,18 +127,15 @@ namespace TrickOrTreat.Behaviours
             }
         }
 
-        bool FoundClosestPlayerInRange(float range, float senseRange)
+        public bool FoundClosestPlayerInRange(int range, int senseRange)
         {
-            TargetClosestPlayer(bufferDistance: 1.5f, requireLineOfSight: true);
-            if (targetPlayer == null)
-            {
-                TargetClosestPlayer(bufferDistance: 1.5f, requireLineOfSight: false);
-                range = senseRange;
-            }
-            return targetPlayer != null && Vector3.Distance(transform.position, targetPlayer.transform.position) < range;
+            PlayerControllerB player = CheckLineOfSightForPlayer(60f, range, senseRange);
+            if (player == null || !PlayerIsTargetable(player)) return false;
+
+            return targetPlayer = player;
         }
 
-        bool TargetClosestPlayerInAnyCase()
+        public bool TargetClosestPlayerInAnyCase()
         {
             mostOptimalDistance = 2000f;
             targetPlayer = null;
@@ -151,8 +148,7 @@ namespace TrickOrTreat.Behaviours
                     targetPlayer = StartOfRound.Instance.allPlayerScripts[i];
                 }
             }
-            if (targetPlayer == null) return false;
-            return true;
+            return targetPlayer != null;
         }
 
         public IEnumerator InteractingWithPlayerCoroutine()

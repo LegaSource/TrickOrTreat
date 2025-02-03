@@ -26,8 +26,8 @@ namespace TrickOrTreat.Managers
             isHalloweenCandyIconOn = TrickOrTreat.configFile.Bind(Constants.HALLOWEEN_CANDY, "Is icon displayed", true, $"Display the {Constants.HALLOWEEN_CANDY} icon when player has one");
             halloweenCandyPosX = TrickOrTreat.configFile.Bind(Constants.HALLOWEEN_CANDY, "Dead curses pos X", -30f, $"X position of the {Constants.HALLOWEEN_CANDY} icon");
             halloweenCandyPosY = TrickOrTreat.configFile.Bind(Constants.HALLOWEEN_CANDY, "Dead curses pos Y", 40f, $"Y position of the {Constants.HALLOWEEN_CANDY} icon");
-            halloweenCandyRarity = TrickOrTreat.configFile.Bind(Constants.HALLOWEEN_CANDY, "Rarity", 50, $"{Constants.HALLOWEEN_CANDY} spawn rarity.");
-            minHalloweenCandy = TrickOrTreat.configFile.Bind(Constants.HALLOWEEN_CANDY, "Min spawn", 3, $"Min {Constants.HALLOWEEN_CANDY} to spawn");
+            halloweenCandyRarity = TrickOrTreat.configFile.Bind(Constants.HALLOWEEN_CANDY, "Rarity", 25, $"{Constants.HALLOWEEN_CANDY} spawn rarity.");
+            minHalloweenCandy = TrickOrTreat.configFile.Bind(Constants.HALLOWEEN_CANDY, "Min spawn", 2, $"Min {Constants.HALLOWEEN_CANDY} to spawn");
             maxHalloweenCandy = TrickOrTreat.configFile.Bind(Constants.HALLOWEEN_CANDY, "Max spawn", 4, $"Max {Constants.HALLOWEEN_CANDY} to spawn");
         }
     }
