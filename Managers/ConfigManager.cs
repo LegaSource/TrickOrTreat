@@ -1,34 +1,27 @@
 ﻿using BepInEx.Configuration;
 
-namespace TrickOrTreat.Managers
-{
-    internal class ConfigManager
-    {
-        // Little Girl
-        public static ConfigEntry<int> littleGirlRarity;
-        public static ConfigEntry<int> littleGirlRarityIncrement;
-        public static ConfigEntry<int> waitingDuration;
-        // Halloween Candy
-        public static ConfigEntry<bool> isHalloweenCandyIconOn;
-        public static ConfigEntry<float> halloweenCandyPosX;
-        public static ConfigEntry<float> halloweenCandyPosY;
-        public static ConfigEntry<int> halloweenCandyRarity;
-        public static ConfigEntry<int> minHalloweenCandy;
-        public static ConfigEntry<int> maxHalloweenCandy;
+namespace TrickOrTreat.Managers;
 
-        internal static void Load()
-        {
-            // Little Girl
-            littleGirlRarity = TrickOrTreat.configFile.Bind(Constants.LITTLE_GIRL, "Rarity", 5, "Little Girl base rarity.");
-            littleGirlRarityIncrement = TrickOrTreat.configFile.Bind(Constants.LITTLE_GIRL, "Increment rarity", 3, "By how much the Little Girl's chances of spawning are increased for each Halloween Candy spawned?");
-            waitingDuration = TrickOrTreat.configFile.Bind(Constants.LITTLE_GIRL, "Waiting duration", 5, "Time window during which a player can give a candy to the little girl before she sends her curse.");
-            // Halloween Candy
-            isHalloweenCandyIconOn = TrickOrTreat.configFile.Bind(Constants.HALLOWEEN_CANDY, "Is icon displayed", true, $"Display the {Constants.HALLOWEEN_CANDY} icon when player has one");
-            halloweenCandyPosX = TrickOrTreat.configFile.Bind(Constants.HALLOWEEN_CANDY, "Dead curses pos X", -30f, $"X position of the {Constants.HALLOWEEN_CANDY} icon");
-            halloweenCandyPosY = TrickOrTreat.configFile.Bind(Constants.HALLOWEEN_CANDY, "Dead curses pos Y", 40f, $"Y position of the {Constants.HALLOWEEN_CANDY} icon");
-            halloweenCandyRarity = TrickOrTreat.configFile.Bind(Constants.HALLOWEEN_CANDY, "Rarity", 25, $"{Constants.HALLOWEEN_CANDY} spawn rarity.");
-            minHalloweenCandy = TrickOrTreat.configFile.Bind(Constants.HALLOWEEN_CANDY, "Min spawn", 2, $"Min {Constants.HALLOWEEN_CANDY} to spawn");
-            maxHalloweenCandy = TrickOrTreat.configFile.Bind(Constants.HALLOWEEN_CANDY, "Max spawn", 4, $"Max {Constants.HALLOWEEN_CANDY} to spawn");
-        }
+internal class ConfigManager
+{
+    // Hollow Girl
+    public static ConfigEntry<int> hollowGirlRarity;
+    public static ConfigEntry<int> waitingDuration;
+    public static ConfigEntry<int> damage;
+    // Cursed Candy
+    public static ConfigEntry<int> cursedCandyRarity;
+    public static ConfigEntry<int> minCursedCandy;
+    public static ConfigEntry<int> maxCursedCandy;
+
+    internal static void Load()
+    {
+        // Hollow Girl
+        hollowGirlRarity = TrickOrTreat.configFile.Bind(Constants.HOLLOW_GIRL, "Rarity", 20, $"{Constants.HOLLOW_GIRL} base rarity.");
+        waitingDuration = TrickOrTreat.configFile.Bind(Constants.HOLLOW_GIRL, "Waiting duration", 5, "Time window during which a player can give a candy.");
+        damage = TrickOrTreat.configFile.Bind(Constants.HOLLOW_GIRL, "Damage", 40, $"{Constants.HOLLOW_GIRL} damage");
+        // Cursed Candy
+        cursedCandyRarity = TrickOrTreat.configFile.Bind(Constants.CURSED_CANDY, "Rarity", 25, $"{Constants.CURSED_CANDY} spawn rarity.");
+        minCursedCandy = TrickOrTreat.configFile.Bind(Constants.CURSED_CANDY, "Min spawn", 0, $"Min {Constants.CURSED_CANDY} to spawn");
+        maxCursedCandy = TrickOrTreat.configFile.Bind(Constants.CURSED_CANDY, "Max spawn", 2, $"Max {Constants.CURSED_CANDY} to spawn");
     }
 }

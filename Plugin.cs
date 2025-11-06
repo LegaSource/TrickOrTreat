@@ -1,96 +1,83 @@
-﻿using BepInEx.Configuration;
-using BepInEx;
+﻿using BepInEx;
+using BepInEx.Configuration;
+using BepInEx.Logging;
+using LegaFusionCore.Managers;
+using LethalLib.Modules;
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
-using UnityEngine;
-using LethalLib.Modules;
-using BepInEx.Logging;
-using System.Collections.Generic;
-using TrickOrTreat.Managers;
 using TrickOrTreat.Behaviours;
-using CursedScraps.Values;
-using HarmonyLib;
-using TrickOrTreat.Patches;
+using TrickOrTreat.Managers;
+using UnityEngine;
 
-namespace TrickOrTreat
+namespace TrickOrTreat;
+
+[BepInPlugin(modGUID, modName, modVersion)]
+public class TrickOrTreat : BaseUnityPlugin
 {
-    [BepInPlugin(modGUID, modName, modVersion)]
-    public class TrickOrTreat : BaseUnityPlugin
+    internal const string modGUID = "Lega.TrickOrTreat";
+    internal const string modName = "Trick Or Treat";
+    internal const string modVersion = "2.0.0";
+
+    private static readonly AssetBundle bundle = AssetBundle.LoadFromFile(Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "trickortreat"));
+    internal static ManualLogSource mls;
+    public static ConfigFile configFile;
+
+    // Items
+    public static GameObject cursedBallObj;
+    public static Item cursedCandy;
+
+    public void Awake()
     {
-        private const string modGUID = "Lega.TrickOrTreat";
-        private const string modName = "Trick Or Treat";
-        private const string modVersion = "1.0.4";
+        mls = BepInEx.Logging.Logger.CreateLogSource("TrickOrTreat");
+        configFile = Config;
+        ConfigManager.Load();
 
-        private readonly Harmony harmony = new Harmony(modGUID);
-        private readonly static AssetBundle bundle = AssetBundle.LoadFromFile(Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "trickortreat"));
-        internal static ManualLogSource mls;
-        public static ConfigFile configFile;
+        NetcodePatcher();
+        LoadItems();
+        LoadEnemies();
+        LoadNetworkPrefabs();
+    }
 
-        public static GameObject halloweenCandySprite;
-
-        public void Awake()
+    private static void NetcodePatcher()
+    {
+        System.Type[] types = Assembly.GetExecutingAssembly().GetTypes();
+        foreach (System.Type type in types)
         {
-            mls = BepInEx.Logging.Logger.CreateLogSource("TrickOrTreat");
-            configFile = Config;
-            ConfigManager.Load();
-
-            NetcodePatcher();
-            LoadItems();
-            LoadEnemies();
-            LoadSprites();
-
-            harmony.PatchAll(typeof(HUDManagerPatch));
-            harmony.PatchAll(typeof(ObjectCSManagerPatch));
-            harmony.PatchAll(typeof(PlayerControllerBPatch));
-            harmony.PatchAll(typeof(BeltBagItemPatch));
-            harmony.PatchAll(typeof(RoundManagerPatch));
-        }
-
-        private static void NetcodePatcher()
-        {
-            var types = Assembly.GetExecutingAssembly().GetTypes();
-            foreach (var type in types)
+            MethodInfo[] methods = type.GetMethods(BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+            foreach (MethodInfo method in methods)
             {
-                var methods = type.GetMethods(BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
-                foreach (var method in methods)
-                {
-                    var attributes = method.GetCustomAttributes(typeof(RuntimeInitializeOnLoadMethodAttribute), false);
-                    if (attributes.Length > 0)
-                        method.Invoke(null, null);
-                }
+                object[] attributes = method.GetCustomAttributes(typeof(RuntimeInitializeOnLoadMethodAttribute), false);
+                if (attributes.Length > 0)
+                    _ = method.Invoke(null, null);
             }
         }
+    }
 
-        public static void LoadItems()
+    public static void LoadItems()
+    {
+        cursedCandy = bundle.LoadAsset<Item>("Assets/CursedCandy/CursedCandyItem.asset");
+        LFCObjectsManager.RegisterObject(typeof(CursedCandy), cursedCandy);
+    }
+
+    public static void LoadEnemies()
+    {
+        EnemyType hollowGirl = bundle.LoadAsset<EnemyType>("Assets/HollowGirl/HollowGirlEnemy.asset");
+        NetworkPrefabs.RegisterNetworkPrefab(hollowGirl.enemyPrefab);
+        Enemies.RegisterEnemy(hollowGirl, ConfigManager.hollowGirlRarity.Value, Levels.LevelTypes.All, null, null);
+    }
+
+    public static void LoadNetworkPrefabs()
+    {
+        HashSet<GameObject> gameObjects =
+        [
+            (cursedBallObj = bundle.LoadAsset<GameObject>("Assets/CursedBall/CursedBall.prefab")),
+        ];
+
+        foreach (GameObject gameObject in gameObjects)
         {
-            List<CustomItem> customItems = new List<CustomItem>
-            {
-                new CustomItem(typeof(HalloweenCandy), bundle.LoadAsset<Item>("Assets/HalloweenCandy/HalloweenCandyItem.asset"), true, ConfigManager.minHalloweenCandy.Value, ConfigManager.maxHalloweenCandy.Value, ConfigManager.halloweenCandyRarity.Value)
-            };
-
-            foreach (CustomItem customItem in customItems)
-            {
-                PhysicsProp script = customItem.Item.spawnPrefab.AddComponent(customItem.Type) as PhysicsProp;
-                script.grabbable = true;
-                script.grabbableToEnemies = true;
-                script.itemProperties = customItem.Item;
-                if (customItem.Item.isScrap) script.scrapValue = customItem.Value;
-
-                NetworkPrefabs.RegisterNetworkPrefab(customItem.Item.spawnPrefab);
-                Utilities.FixMixerGroups(customItem.Item.spawnPrefab);
-                Items.RegisterItem(customItem.Item);
-            }
-            CursedScraps.CursedScraps.customItems.AddRange(customItems);
+            NetworkPrefabs.RegisterNetworkPrefab(gameObject);
+            Utilities.FixMixerGroups(gameObject);
         }
-
-        public static void LoadEnemies()
-        {
-            EnemyType littleGirl = bundle.LoadAsset<EnemyType>("Assets/LittleGirl/LittleGirlEnemy.asset");
-            NetworkPrefabs.RegisterNetworkPrefab(littleGirl.enemyPrefab);
-            Enemies.RegisterEnemy(littleGirl, ConfigManager.littleGirlRarity.Value, Levels.LevelTypes.All, null, null);
-        }
-
-        public static void LoadSprites()
-            => halloweenCandySprite = bundle.LoadAsset<GameObject>("Assets/Images/HalloweenCandyImage.prefab");
     }
 }
