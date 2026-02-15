@@ -16,39 +16,33 @@ public class HollowGirl : EnemyAI
     public Transform TurnCompass;
     public AudioClip[] FootstepSounds = Array.Empty<AudioClip>();
     public AudioClip SwingSound;
-    public AudioClip DieSound;
+    public Transform ThrowPoint;
 
     public float footstepTimer = 0f;
     public float throwTimer = 0f;
     public float angerTimer = 0f;
 
-    public static float throwCooldown = 1f;
-    public static float angerCooldown = 30f;
+    public float throwCooldown = 5f;
+    public float angerCooldown = 30f;
 
+    public bool canThrow = false;
     public bool isAngry = false;
     public bool isWaiting = false;
     public bool isCursed = false;
 
+    public Coroutine stunCoroutine;
+    public Coroutine throwCoroutine;
     public Coroutine interactingCoroutine;
-    public Coroutine attackCoroutine;
-    public Coroutine killCoroutine;
+    public Coroutine swingCoroutine;
 
-    public enum State
-    {
-        WANDERING,
-        CHASING,
-        THROWING,
-        INTERACTING
-    }
+    public enum State { WANDERING, CHASING, THROWING, INTERACTING }
 
     public override void Start()
     {
         base.Start();
 
         currentBehaviourStateIndex = (int)State.WANDERING;
-        creatureAnimator.SetTrigger("startWalk");
         StartSearch(transform.position);
-
         if (LFCUtilities.IsServer)
         {
             for (int i = 0; i < ConfigManager.maxCursedCandy.Value; i++)
@@ -61,51 +55,67 @@ public class HollowGirl : EnemyAI
 
     public override void Update()
     {
-        if (killCoroutine != null) return;
         base.Update();
 
-        creatureAnimator.SetBool("stunned", stunNormalizedTimer > 0f);
-        if (stunNormalizedTimer > 0f)
-        {
-            agent.speed = 0f;
-            if (stunnedByPlayer != null)
-            {
-                targetPlayer = stunnedByPlayer;
-                StopSearch(currentSearch);
-                SwitchToBehaviourClientRpc((int)State.CHASING);
-            }
-            return;
-        }
         PlayFootstepSound();
         int state = currentBehaviourStateIndex;
         if (targetPlayer != null && (state == (int)State.CHASING || state == (int)State.INTERACTING || state == (int)State.THROWING))
         {
             TurnCompass.LookAt(targetPlayer.gameplayCamera.transform.position);
             transform.rotation = Quaternion.Lerp(transform.rotation, Quaternion.Euler(new Vector3(0f, TurnCompass.eulerAngles.y, 0f)), 4f * Time.deltaTime);
-
-            if (state == (int)State.THROWING) throwTimer += Time.deltaTime;
         }
-        if (isAngry)
-        {
-            angerTimer += Time.deltaTime;
-            if (angerTimer >= angerCooldown)
-            {
-                isAngry = false;
-                angerTimer = 0f;
-            }
-        }
+        LFCUtilities.UpdateTimer(ref angerTimer, angerCooldown, isAngry, () => isAngry = false);
+        LFCUtilities.UpdateTimer(ref throwTimer, throwCooldown, !canThrow, () => canThrow = true);
     }
 
     public void PlayFootstepSound()
     {
-        if (currentBehaviourStateIndex == (int)State.INTERACTING || currentBehaviourStateIndex == (int)State.THROWING || attackCoroutine != null) return;
-
-        footstepTimer -= Time.deltaTime;
-        if (FootstepSounds.Length > 0 && footstepTimer <= 0)
+        AnimatorClipInfo[] info = creatureAnimator.GetCurrentAnimatorClipInfo(0);
+        if (info.Length != 0 && (info[0].clip.name.Contains("walk") || info[0].clip.name.Contains("run")))
         {
-            creatureSFX.PlayOneShot(FootstepSounds[UnityEngine.Random.Range(0, FootstepSounds.Length)]);
-            footstepTimer = 0.6f;
+            footstepTimer -= Time.deltaTime;
+            if (FootstepSounds.Length > 0 && footstepTimer <= 0)
+            {
+                creatureSFX.PlayOneShot(FootstepSounds[UnityEngine.Random.Range(0, FootstepSounds.Length)]);
+                footstepTimer = info[0].clip.name.Contains("walk") ? 0.6f : 0.4f;
+            }
         }
+    }
+
+    public override void SetEnemyStunned(bool setToStunned, float setToStunTime = 1.917f, PlayerControllerB setStunnedByPlayer = null)
+    {
+        if (LFCUtilities.IsServer && setToStunned && stunCoroutine == null)
+        {
+            base.SetEnemyStunned(setToStunned, setToStunTime, setStunnedByPlayer);
+            stunCoroutine = StartCoroutine(StunCoroutine());
+        }
+    }
+
+    public IEnumerator StunCoroutine()
+    {
+        CancelThrowCoroutine();
+        CancelInteractingCoroutine();
+        CancelSwingCoroutine();
+
+        agent.speed = 0f;
+        DoAnimationEveryoneRpc("startStun");
+        yield return this.WaitForFullAnimation("stun");
+
+        while (stunNormalizedTimer > 0f)
+            yield return null;
+
+        while (postStunInvincibilityTimer > 0f)
+            yield return null;
+
+        DoAnimationEveryoneRpc("startRun");
+        if (currentBehaviourStateIndex != (int)State.CHASING && stunnedByPlayer != null)
+        {
+            targetPlayer = stunnedByPlayer;
+            StopSearch(currentSearch);
+            SwitchToBehaviourClientRpc((int)State.CHASING);
+        }
+
+        stunCoroutine = null;
     }
 
     public override void DoAIInterval()
@@ -115,44 +125,31 @@ public class HollowGirl : EnemyAI
 
         switch (currentBehaviourStateIndex)
         {
-            case (int)State.WANDERING:
-                DoWandering();
-                break;
-            case (int)State.CHASING:
-                DoChasing();
-                break;
-            case (int)State.THROWING:
-                DoThrowing();
-                break;
-            case (int)State.INTERACTING:
-                DoInteracting();
-                break;
+            case (int)State.WANDERING: DoWandering(); break;
+            case (int)State.CHASING: DoChasing(); break;
+            case (int)State.THROWING: DoThrowing(); break;
+            case (int)State.INTERACTING: DoInteracting(); break;
         }
     }
 
     public void DoWandering()
     {
         agent.speed = 3f;
-        if (FoundClosestPlayerInRange(25, 10))
+        if (this.FoundClosestPlayerInRange(25, 10))
         {
             StopSearch(currentSearch);
-            DoAnimationEveryoneRpc("startChase");
+            DoAnimationEveryoneRpc("startRun");
             SwitchToBehaviourClientRpc((int)State.CHASING);
         }
     }
 
-    private bool FoundClosestPlayerInRange(int range, int senseRange)
-    {
-        PlayerControllerB player = CheckLineOfSightForPlayer(60f, range, senseRange);
-        return player != null && PlayerIsTargetable(player) && (bool)(targetPlayer = player);
-    }
-
     public void DoChasing()
     {
+        if (swingCoroutine != null) return;
+
         agent.speed = 6f;
-        throwCooldown = 1f;
-        float distanceWithPlayer = Vector3.Distance(transform.position, targetPlayer.transform.position);
-        if (!TargetClosestPlayerInAnyCase() || (distanceWithPlayer > 30 && !CheckLineOfSightForPosition(targetPlayer.transform.position)))
+        if (this.TargetOutsideChasedPlayer()) return;
+        if (!this.TargetClosestPlayerInAnyCase(out float distanceWithPlayer) || (distanceWithPlayer > 30f && !CheckLineOfSightForPosition(targetPlayer.transform.position)))
         {
             StartSearch(transform.position);
             DoAnimationEveryoneRpc("startWalk");
@@ -163,78 +160,80 @@ public class HollowGirl : EnemyAI
         {
             if (distanceWithPlayer <= 5f)
             {
+                agent.speed = 0f;
                 DoAnimationEveryoneRpc("startIdle");
-                SwitchToBehaviourServerRpc((int)State.INTERACTING);
+                SwitchToBehaviourClientRpc((int)State.INTERACTING);
                 return;
             }
         }
-        else if (CanThrow(distanceWithPlayer))
+        else if (!CanHitPlayer(targetPlayer) && distanceWithPlayer <= 15f && (distanceWithPlayer <= 2f || CheckLineOfSightForPosition(targetPlayer.transform.position)))
         {
-            DoAnimationEveryoneRpc("startIdle");
-            SwitchToBehaviourServerRpc((int)State.THROWING);
+            SwitchToBehaviourClientRpc((int)State.THROWING);
             return;
         }
         SetMovingTowardsTargetPlayer(targetPlayer);
     }
 
-    public bool TargetClosestPlayerInAnyCase()
-    {
-        mostOptimalDistance = 2000f;
-        targetPlayer = null;
-        for (int i = 0; i < StartOfRound.Instance.connectedPlayersAmount + 1; i++)
-        {
-            tempDist = Vector3.Distance(transform.position, StartOfRound.Instance.allPlayerScripts[i].transform.position);
-            if (tempDist < mostOptimalDistance)
-            {
-                mostOptimalDistance = tempDist;
-                targetPlayer = StartOfRound.Instance.allPlayerScripts[i];
-            }
-        }
-        return targetPlayer != null;
-    }
-
     public void DoThrowing()
     {
-        agent.speed = 0f;
+        if (throwCoroutine != null) return;
+
+        agent.speed = 6f;
         float distanceWithPlayer = Vector3.Distance(transform.position, targetPlayer.transform.position);
         if (HoldingCursedCandy(targetPlayer))
         {
-            throwTimer = 0f;
             if (distanceWithPlayer <= 5f)
             {
                 DoAnimationEveryoneRpc("startIdle");
-                SwitchToBehaviourServerRpc((int)State.INTERACTING);
+                SwitchToBehaviourClientRpc((int)State.INTERACTING);
                 return;
             }
-            DoAnimationEveryoneRpc("startChase");
             SwitchToBehaviourClientRpc((int)State.CHASING);
             return;
         }
-        if (!CanThrow(distanceWithPlayer))
+        if (CanHitPlayer(targetPlayer) || distanceWithPlayer > 20f || (distanceWithPlayer > 2f && !CheckLineOfSightForPosition(targetPlayer.transform.position)))
         {
-            throwTimer = 0f;
-            DoAnimationEveryoneRpc("startChase");
             SwitchToBehaviourClientRpc((int)State.CHASING);
             return;
         }
-        ThrowCursedBall(targetPlayer);
+        if (canThrow)
+        {
+            canThrow = false;
+            throwCoroutine = StartCoroutine(ThrowCoroutine());
+            return;
+        }
+        SetMovingTowardsTargetPlayer(targetPlayer);
     }
 
-    public void ThrowCursedBall(PlayerControllerB player)
+    public IEnumerator ThrowCoroutine()
     {
-        if (throwTimer < throwCooldown) return;
+        agent.speed = 0f;
+        DoAnimationEveryoneRpc("startIdle");
+        yield return this.WaitForFullAnimation("idle");
 
         DoAnimationEveryoneRpc("startThrow");
+        yield return new WaitForSeconds(0.13f);
         PlayThrowEveryoneRpc();
 
-        GameObject gameObject = Instantiate(TrickOrTreat.cursedBallObj, transform.position + (Vector3.up * 1.5f), Quaternion.identity, StartOfRound.Instance.propsContainer);
-        CursedBall cursedBall = gameObject.GetComponent<CursedBall>();
+        GameObject gameObject = Instantiate(TrickOrTreat.cursedBallObj, ThrowPoint.transform.position, Quaternion.identity);
         gameObject.GetComponent<NetworkObject>().Spawn();
-        cursedBall.ThrowCursedBallEveryoneRpc(player.transform.position + (Vector3.up * 1.5f));
+        gameObject.GetComponent<CursedBall>().ThrowCursedBallEveryoneRpc(startPosition: ThrowPoint.transform.position,
+            direction: targetPlayer.transform.position + (Vector3.up * 1.5f) - ThrowPoint.transform.position,
+            isOutside: isOutside);
 
-        DoAnimationEveryoneRpc("startIdle");
-        throwTimer = 0f;
-        throwCooldown = 5f;
+        yield return this.WaitForFullAnimation("throw");
+        DoAnimationEveryoneRpc("startRun");
+
+        throwCoroutine = null;
+    }
+
+    public void CancelThrowCoroutine()
+    {
+        if (throwCoroutine != null)
+        {
+            StopCoroutine(throwCoroutine);
+            throwCoroutine = null;
+        }
     }
 
     [Rpc(SendTo.Everyone, RequireOwnership = false)]
@@ -259,8 +258,7 @@ public class HollowGirl : EnemyAI
             if (isCursed) break;
         }
 
-        EndInteractingEveryoneRpc();
-        interactingCoroutine = null;
+        CancelInteractingCoroutine();
     }
 
     [Rpc(SendTo.Everyone, RequireOwnership = false)]
@@ -273,10 +271,20 @@ public class HollowGirl : EnemyAI
             HUDManager.Instance.AddChatMessage(Constants.MESSAGE_TRICK_OR_TREAT, Constants.HOLLOW_GIRL);
     }
 
+    public void CancelInteractingCoroutine()
+    {
+        if (interactingCoroutine != null)
+        {
+            StopCoroutine(interactingCoroutine);
+            interactingCoroutine = null;
+            EndInteractingEveryoneRpc();
+        }
+    }
+
     [Rpc(SendTo.Everyone, RequireOwnership = false)]
     public void EndInteractingEveryoneRpc()
     {
-        creatureAnimator.SetTrigger("startChase");
+        creatureAnimator.SetTrigger("startRun");
         SwitchToBehaviourStateOnLocalClient((int)State.CHASING);
 
         isAngry = true;
@@ -295,55 +303,49 @@ public class HollowGirl : EnemyAI
     {
         base.OnCollideWithPlayer(other);
 
-        if (currentBehaviourStateIndex != (int)State.CHASING || attackCoroutine != null || killCoroutine != null) return;
+        if (currentBehaviourStateIndex != (int)State.CHASING || swingCoroutine != null) return;
         PlayerControllerB player = MeetsStandardPlayerCollisionConditions(other);
         if (!LFCUtilities.ShouldBeLocalPlayer(player) || !CanHitPlayer(player)) return;
 
-        AttackEveryoneRpc((int)player.playerClientId);
+        SwingEveryoneRpc((int)player.playerClientId);
     }
 
     [Rpc(SendTo.Everyone, RequireOwnership = false)]
-    public void AttackEveryoneRpc(int playerId) => attackCoroutine ??= StartCoroutine(AttackCoroutine(StartOfRound.Instance.allPlayerObjects[playerId].GetComponent<PlayerControllerB>()));
+    public void SwingEveryoneRpc(int playerId) => swingCoroutine ??= StartCoroutine(SwingCoroutine(StartOfRound.Instance.allPlayerObjects[playerId].GetComponent<PlayerControllerB>()));
 
-    public IEnumerator AttackCoroutine(PlayerControllerB player)
+    public IEnumerator SwingCoroutine(PlayerControllerB player)
     {
         agent.speed = 0f;
-        creatureAnimator.SetTrigger("startAttack");
-        creatureAnimator.SetTrigger("startChase");
+        creatureAnimator.SetTrigger("startSwing");
         creatureSFX.PlayOneShot(SwingSound);
-
-        yield return new WaitForSeconds(1.1f);
-
         player.DamagePlayer(ConfigManager.damage.Value, hasDamageSFX: true, callRPC: true, CauseOfDeath.Crushing);
-        creatureAnimator.SetTrigger("startChase");
+
+        yield return this.WaitForFullAnimation("swing");
+
+        creatureAnimator.SetTrigger("startRun");
         agent.speed = 6f;
-        attackCoroutine = null;
+        swingCoroutine = null;
+    }
+
+    public void CancelSwingCoroutine()
+    {
+        if (swingCoroutine != null)
+        {
+            StopCoroutine(swingCoroutine);
+            swingCoroutine = null;
+        }
     }
 
     public override void HitEnemy(int force = 1, PlayerControllerB playerWhoHit = null, bool playHitSFX = false, int hitID = -1)
     {
-        if (isEnemyDead || !CanHitPlayer(playerWhoHit)) return;
-        base.HitEnemy(force, playerWhoHit, playHitSFX, hitID);
-
-        enemyHP -= force;
-        if (enemyHP <= 0 && IsOwner) KillEnemyOnOwnerClient();
+        if (!isEnemyDead && CanHitPlayer(playerWhoHit))
+        {
+            base.HitEnemy(force, playerWhoHit, playHitSFX, hitID);
+            enemyHP -= force;
+            if (enemyHP <= 0 && IsOwner) KillEnemyOnOwnerClient();
+        }
     }
 
-    public override void KillEnemy(bool destroy = false) => killCoroutine = StartCoroutine(KillEnemyCoroutine(destroy));
-
-    public IEnumerator KillEnemyCoroutine(bool destroy)
-    {
-        creatureAnimator.SetTrigger("startKill");
-        creatureSFX.PlayOneShot(DieSound);
-
-        yield return new WaitForSeconds(3f);
-
-        LFCGlobalManager.PlayParticle($"{LegaFusionCore.LegaFusionCore.modName}{LegaFusionCore.LegaFusionCore.darkExplosionParticle.name}", transform.position, Quaternion.Euler(-90, 0, 0));
-        LFCGlobalManager.PlayAudio($"{LegaFusionCore.LegaFusionCore.modName}{LegaFusionCore.LegaFusionCore.darkExplosionAudio.name}", transform.position);
-        base.KillEnemy(destroy);
-    }
-
-    public bool CanThrow(float distanceWithPlayer) => !CanHitPlayer(targetPlayer) && distanceWithPlayer <= 20f && (distanceWithPlayer <= 2f || CheckLineOfSightForPosition(targetPlayer.transform.position));
     public bool CanHitPlayer(PlayerControllerB player) => isCursed || (player != null && HasCurse(player.gameObject));
     public bool HoldingCursedCandy(PlayerControllerB player) => !isCursed && !isAngry && player.currentlyHeldObjectServer != null && player.currentlyHeldObjectServer is CursedCandy;
 

@@ -2,6 +2,7 @@
 using BepInEx.Configuration;
 using BepInEx.Logging;
 using LegaFusionCore.Managers;
+using LegaFusionCore.ModsCompat;
 using LethalLib.Modules;
 using System.Collections.Generic;
 using System.IO;
@@ -17,14 +18,14 @@ public class TrickOrTreat : BaseUnityPlugin
 {
     internal const string modGUID = "Lega.TrickOrTreat";
     internal const string modName = "Trick Or Treat";
-    internal const string modVersion = "2.0.0";
+    internal const string modVersion = "2.0.1";
 
     private static readonly AssetBundle bundle = AssetBundle.LoadFromFile(Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "trickortreat"));
     internal static ManualLogSource mls;
     public static ConfigFile configFile;
 
-    // Items
     public static GameObject cursedBallObj;
+    public static GameObject cursedExplosionParticle;
     public static Item cursedCandy;
 
     public void Awake()
@@ -57,7 +58,7 @@ public class TrickOrTreat : BaseUnityPlugin
     public static void LoadItems()
     {
         cursedCandy = bundle.LoadAsset<Item>("Assets/CursedCandy/CursedCandyItem.asset");
-        LFCObjectsManager.RegisterObject(typeof(CursedCandy), cursedCandy);
+        _ = LFCObjectsManager.RegisterObject(typeof(CursedCandy), cursedCandy);
     }
 
     public static void LoadEnemies()
@@ -65,6 +66,11 @@ public class TrickOrTreat : BaseUnityPlugin
         EnemyType hollowGirl = bundle.LoadAsset<EnemyType>("Assets/HollowGirl/HollowGirlEnemy.asset");
         NetworkPrefabs.RegisterNetworkPrefab(hollowGirl.enemyPrefab);
         Enemies.RegisterEnemy(hollowGirl, ConfigManager.hollowGirlRarity.Value, Levels.LevelTypes.All, null, null);
+        SellBodiesFixedSoftCompat.RegisterBody(enemyName: hollowGirl.enemyName,
+            item: bundle.LoadAsset<Item>("Assets/HollowGirl/HollowGirlHeadItem.asset"),
+            minValue: 70,
+            maxValue: 110,
+            enabled: true);
     }
 
     public static void LoadNetworkPrefabs()
@@ -72,6 +78,7 @@ public class TrickOrTreat : BaseUnityPlugin
         HashSet<GameObject> gameObjects =
         [
             (cursedBallObj = bundle.LoadAsset<GameObject>("Assets/CursedBall/CursedBall.prefab")),
+            (cursedExplosionParticle = bundle.LoadAsset<GameObject>("Assets/CursedBall/CursedExplosionParticle.prefab"))
         ];
 
         foreach (GameObject gameObject in gameObjects)

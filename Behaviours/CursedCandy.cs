@@ -14,9 +14,8 @@ public class CursedCandy : PhysicsProp
     public override void Update()
     {
         base.Update();
-        if (!isHeld || isPocketed || playerHeldBy == null || !LFCUtilities.ShouldBeLocalPlayer(playerHeldBy)) return;
-
-        ShowAuraAimedEnemy(playerHeldBy);
+        if (isHeld && !isPocketed && playerHeldBy != null && LFCUtilities.ShouldBeLocalPlayer(playerHeldBy))
+            ShowAuraAimedEnemy(playerHeldBy);
     }
 
     public void ShowAuraAimedEnemy(PlayerControllerB player)
@@ -40,10 +39,12 @@ public class CursedCandy : PhysicsProp
     public override void ItemActivate(bool used, bool buttonDown = true)
     {
         base.ItemActivate(used, buttonDown);
-        if (!buttonDown || playerHeldBy == null || aimedEnemy == null || !aimedEnemy.isWaiting) return;
 
-        aimedEnemy.ApplyCurseEveryoneRpc();
-        LFCNetworkManager.Instance.DestroyObjectEveryoneRpc(GetComponent<NetworkObject>());
+        if (buttonDown && playerHeldBy != null && aimedEnemy != null && aimedEnemy.isWaiting)
+        {
+            aimedEnemy.ApplyCurseEveryoneRpc();
+            LFCNetworkManager.Instance.DestroyObjectEveryoneRpc(GetComponent<NetworkObject>());
+        }
     }
 
     public override void PocketItem()
@@ -60,9 +61,10 @@ public class CursedCandy : PhysicsProp
 
     public void RemoveAuraFromEnemy()
     {
-        if (aimedEnemy == null) return;
-
-        CustomPassManager.RemoveAuraFromObjects([aimedEnemy.gameObject], $"{TrickOrTreat.modName}{gameObject.name}");
-        aimedEnemy = null;
+        if (aimedEnemy != null)
+        {
+            CustomPassManager.RemoveAuraFromObjects([aimedEnemy.gameObject], $"{TrickOrTreat.modName}{gameObject.name}");
+            aimedEnemy = null;
+        }
     }
 }
