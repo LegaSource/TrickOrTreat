@@ -68,8 +68,8 @@ public class TrickOrTreat : BaseUnityPlugin
         Enemies.RegisterEnemy(hollowGirl, ConfigManager.hollowGirlRarity.Value, Levels.LevelTypes.All, null, null);
         SellBodiesFixedSoftCompat.RegisterBody(enemyName: hollowGirl.enemyName,
             item: bundle.LoadAsset<Item>("Assets/HollowGirl/HollowGirlHeadItem.asset"),
-            minValue: 70,
-            maxValue: 110,
+            minValue: ConfigManager.minHeadValue.Value,
+            maxValue: ConfigManager.maxHeadValue.Value,
             enabled: true);
     }
 

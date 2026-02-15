@@ -47,7 +47,7 @@ public class HollowGirl : EnemyAI
         {
             for (int i = 0; i < ConfigManager.maxCursedCandy.Value; i++)
             {
-                if (i < ConfigManager.minCursedCandy.Value || new System.Random().Next(1, 100) <= ConfigManager.cursedCandyRarity.Value)
+                if (i < ConfigManager.minCursedCandy.Value || UnityEngine.Random.Range(1, 101) <= ConfigManager.cursedCandyRarity.Value)
                     LFCObjectsManager.SpawnNewObject(RoundManager.Instance, TrickOrTreat.cursedCandy);
             }
         }

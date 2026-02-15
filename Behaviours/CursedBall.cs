@@ -120,7 +120,7 @@ public class CursedBall : NetworkBehaviour
                     _ = cursedPlayerIds.Add(player.playerClientId);
 
                     List<CurseEffectType> eligibleCurses = CursedScraps.Patches.RoundManagerPatch.GetEligibleCurses(StartOfRound.Instance.currentLevel.PlanetName);
-                    CurseEffectType curseType = eligibleCurses[new System.Random().Next(eligibleCurses.Count)];
+                    CurseEffectType curseType = eligibleCurses[Random.Range(0, eligibleCurses.Count)];
                     CursedScrapsNetworkManager.Instance.ApplyPlayerCurseEveryoneRpc((int)player.playerClientId, curseType.Name, curseType.Duration);
                 }
             }
