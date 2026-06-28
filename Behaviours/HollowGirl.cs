@@ -1,5 +1,5 @@
-﻿using GameNetcodeStuff;
-using LegaFusionCore.Behaviours.Shaders;
+﻿using CursedScraps.Registries;
+using GameNetcodeStuff;
 using LegaFusionCore.Managers;
 using LegaFusionCore.Utilities;
 using System;
@@ -7,7 +7,6 @@ using System.Collections;
 using TrickOrTreat.Managers;
 using Unity.Netcode;
 using UnityEngine;
-using static CursedScraps.Registries.CSCurseRegistry;
 
 namespace TrickOrTreat.Behaviours;
 
@@ -48,7 +47,7 @@ public class HollowGirl : EnemyAI
             for (int i = 0; i < ConfigManager.maxCursedCandy.Value; i++)
             {
                 if (i < ConfigManager.minCursedCandy.Value || UnityEngine.Random.Range(1, 101) <= ConfigManager.cursedCandyRarity.Value)
-                    LFCObjectsManager.SpawnNewObject(RoundManager.Instance, TrickOrTreat.cursedCandy);
+                    LFCObjectsManager.SpawnNewObject(RoundManager.Instance, TrickOrTreat.cursedCandy, minValue: 0, maxValue: 0);
             }
         }
     }
@@ -217,7 +216,8 @@ public class HollowGirl : EnemyAI
 
         GameObject gameObject = Instantiate(TrickOrTreat.cursedBallObj, ThrowPoint.transform.position, Quaternion.identity);
         gameObject.GetComponent<NetworkObject>().Spawn();
-        gameObject.GetComponent<CursedBall>().ThrowCursedBallEveryoneRpc(startPosition: ThrowPoint.transform.position,
+        gameObject.GetComponent<CursedBall>().ThrowFromPositionEveryoneRpc(entityId: NetworkObjectId,
+            startPosition: ThrowPoint.transform.position,
             direction: targetPlayer.transform.position + (Vector3.up * 1.5f) - ThrowPoint.transform.position,
             isOutside: isOutside);
 
@@ -296,7 +296,7 @@ public class HollowGirl : EnemyAI
     public void ApplyCurseEveryoneRpc()
     {
         isCursed = true;
-        CustomPassManager.SetupAuraForObjects([gameObject], CursedScraps.CursedScraps.cursedShader, $"{TrickOrTreat.modName}{CursedScraps.CursedScraps.cursedShader.name}");
+        LFCCustomPassManager.SetupAuraForObjects([gameObject], CursedScraps.CursedScraps.cursedShader, $"{TrickOrTreat.modName}{CursedScraps.CursedScraps.cursedShader.name}");
     }
 
     public override void OnCollideWithPlayer(Collider other)
@@ -346,7 +346,7 @@ public class HollowGirl : EnemyAI
         }
     }
 
-    public bool CanHitPlayer(PlayerControllerB player) => isCursed || (player != null && HasCurse(player.gameObject));
+    public bool CanHitPlayer(PlayerControllerB player) => isCursed || (player != null && CSCurseRegistry.HasCurse(player.gameObject));
     public bool HoldingCursedCandy(PlayerControllerB player) => !isCursed && !isAngry && player.currentlyHeldObjectServer != null && player.currentlyHeldObjectServer is CursedCandy;
 
     [Rpc(SendTo.Everyone, RequireOwnership = false)]

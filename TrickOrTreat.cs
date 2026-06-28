@@ -18,7 +18,7 @@ public class TrickOrTreat : BaseUnityPlugin
 {
     internal const string modGUID = "Lega.TrickOrTreat";
     internal const string modName = "Trick Or Treat";
-    internal const string modVersion = "2.0.1";
+    internal const string modVersion = "2.0.4";
 
     private static readonly AssetBundle bundle = AssetBundle.LoadFromFile(Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "trickortreat"));
     internal static ManualLogSource mls;
